@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; background: #f5f5f5; }
+        h1 { color: #333; }
+        h2 { color: #555; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        button { 
+            padding: 10px 20px; 
+            margin: 5px; 
+            cursor: pointer; 
+            background: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        pre { 
+            background: #f9f9f9; 
+            padding: 15px; 
+            overflow-x: auto; 
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        input { 
+            padding: 8px; 
+            margin: 5px; 
+            width: 250px; 
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .section { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <h1>🚀 School Tutoring API Tester</h1>
+    <div class="status info" id="status">Ready to test! Make sure your server is running on http://localhost:5000</div>
+    
+    <div class="section">
+        <h2>1. Register New User</h2>
+        <button onclick="register()" id="btn-register">Register Admin User</button>
+        <div id="register-result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>2. Login</h2>
+        <input type="email" id="email" placeholder="Email" value="admin@test.com">
+        <input type="password" id="password" placeholder="Password" value="test123456">
+        <br>
+        <button onclick="login()" id="btn-login">Login</button>
+        <div id="login-result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>3. Test Protected Endpoints</h2>
+        <p style="color: #666; font-size: 14px;">You must login or register first to get a token</p>
+        <button onclick="getLessons()" id="btn-lessons">Get Lessons</button>
+        <button onclick="getUsers()" id="btn-users">Get Users (Admin Only)</button>
+        <button onclick="getSchool()" id="btn-school">Get School Info</button>
+        <button onclick="clearResults()">Clear Results</button>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000';
+        let token = localStorage.getItem('apiToken');
+        
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+
+        function showResult(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            const pre = document.createElement('pre');
+            pre.textContent = JSON.stringify(data, null, 2);
+            element.innerHTML = '';
+            element.appendChild(pre);
+            if (isError) {
+                pre.style.color = '#721c24';
+            }
+        }
+
+        async function register() {
+            updateStatus('Registering user...', 'info');
+            const btn = document.getElementById('btn-register');
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: "Test Admin",
+                        email: "admin@test.com",
+                        password: "test123456",
+                        role: "admin"
+                    })
+                });
+                const data = await res.json();
+                
+                if (res.ok && data.token) {
+                    token = data.token;
+                    localStorage.setItem('apiToken', token);
+                    updateStatus('✓ Registration successful! Token saved.', 'success');
+                    showResult('register-result', data);
+                } else {
+                    updateStatus('Registration failed: ' + (data.message || 'Unknown error'), 'error');
+                    showResult('register-result', data, true);
+                }
+            } catch (err) {
+                updateStatus('Error: ' + err.message, 'error');
+                showResult('register-result', { error: err.message }, true);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+                updateStatus('Please enter email and password', 'error');
+                return;
+            }
+
+            updateStatus('Logging in...', 'info');
+            const btn = document.getElementById('btn-login');
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                
+                if (res.ok && data.token) {
+                    token = data.token;
+                    localStorage.setItem('apiToken', token);
+                    updateStatus('✓ Login successful! Token saved.', 'success');
+                    showResult('login-result', data);
+                } else {
+                    updateStatus('Login failed: ' + (data.message || 'Invalid credentials'), 'error');
+                    showResult('login-result', data, true);
+                }
+            } catch (err) {
+                updateStatus('Error: ' + err.message, 'error');
+                showResult('login-result', { error: err.message }, true);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function getLessons() {
+            if (!token) {
+                updateStatus('Please login or register first!', 'error');
+                return;
+            }
+            
+            updateStatus('Fetching lessons...', 'info');
+            try {
+                const res = await fetch(`${API_BASE}/api/lessons`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    updateStatus(`✓ Retrieved ${Array.isArray(data) ? data.length : 0} lessons`, 'success');
+                    showResult('results', data);
+                } else {
+                    updateStatus('Failed to get lessons', 'error');
+                    showResult('results', data, true);
+                }
+            } catch (err) {
+                updateStatus('Error: ' + err.message, 'error');
+                showResult('results', { error: err.message }, true);
+            }
+        }
+
+        async function getUsers() {
+            if (!token) {
+                updateStatus('Please login or register first!', 'error');
+                return;
+            }
+            
+            updateStatus('Fetching users...', 'info');
+            try {
+                const res = await fetch(`${API_BASE}/api/users`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    updateStatus(`✓ Retrieved ${Array.isArray(data) ? data.length : 0} users`, 'success');
+                    showResult('results', data);
+                } else {
+                    updateStatus('Failed: ' + (data.message || 'Unknown error'), 'error');
+                    showResult('results', data, true);
+                }
+            } catch (err) {
+                updateStatus('Error: ' + err.message, 'error');
+                showResult('results', { error: err.message }, true);
+            }
+        }
+
+        async function getSchool() {
+            if (!token) {
+                updateStatus('Please login or register first!', 'error');
+                return;
+            }
+            
+            updateStatus('Fetching school info...', 'info');
+            try {
+                const res = await fetch(`${API_BASE}/api/schools`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    updateStatus('✓ School info retrieved', 'success');
+                    showResult('results', data);
+                } else {
+                    updateStatus('Failed: ' + (data.message || 'Unknown error'), 'error');
+                    showResult('results', data, true);
+                }
+            } catch (err) {
+                updateStatus('Error: ' + err.message, 'error');
+                showResult('results', { error: err.message }, true);
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            updateStatus('Results cleared', 'info');
+        }
+
+        // Check if token exists on load
+        if (token) {
+            updateStatus('Token found in localStorage. You can test protected endpoints.', 'success');
+        }
+    </script>
+</body>
+</html>
